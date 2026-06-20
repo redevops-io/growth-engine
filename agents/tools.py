@@ -3,6 +3,8 @@
 Uses open-source components from the shared lib github.com/redevops-io/agent-harness.
 """
 
+import json
+
 from agent_harness import Tool, ToolSpec  # github.com/redevops-io/agent-harness
 
 
@@ -27,6 +29,12 @@ class ToolRegistry:
             if tool is None:
                 results.append(f"Unknown tool: {tc.function.name}")
                 continue
-            result = tool.run(**tc.function.arguments)
+            # tc.function.arguments is a JSON string per the OpenAI tool-call API.
+            try:
+                arguments = json.loads(tc.function.arguments or "{}")
+            except (json.JSONDecodeError, TypeError):
+                results.append(f"Invalid arguments for tool: {tc.function.name}")
+                continue
+            result = tool.run(**arguments)
             results.append(str(result))
         return "\n".join(results)

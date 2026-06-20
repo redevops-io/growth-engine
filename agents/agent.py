@@ -9,7 +9,6 @@ Environment variables:
 import os
 from openai import OpenAI
 
-from agent_harness import Runtime  # github.com/redevops-io/agent-harness
 from .tools import ToolRegistry
 from .guardrails import Guardrails
 
@@ -27,7 +26,6 @@ class Agent:
 
     def run(self, user_message: str) -> str:
         """Send a message to the LLM and return the assistant reply."""
-        runtime = Runtime()
         messages = [{"role": "user", "content": user_message}]
 
         # Apply guardrails before sending
