@@ -1,188 +1,176 @@
-# redevops.io — Agentic Marketing Attribution & Channel Optimization
+# agentic-growth-engine — agent layer + dashboard over a real Umami core
 
-**Open-Source | Self-Hostable | AGPL Licensed**
+An "agentic module on a real OSS core" vertical slice (same pattern as the
+[`agentic-billing`](../billing) reference, which wraps Lago). This one wraps the running
+self-hosted **Umami** instance (the open-source web-analytics core) with:
 
-> Stop guessing which marketing channels drive revenue. redevops.io is an open-core, agentic platform that gives SMEs enterprise-grade marketing attribution without the enterprise price tag.
+- an **agent layer** that reads REAL Umami data over its REST API (stats + UTM / referrer
+  metrics) and turns it into **lead-source attribution** + growth KPIs, and
+- a GA4 / HubSpot-style **MD3 dashboard** rendered from that live data (no mock data),
 
----
-
-## The Problem → Legacy → redevops.io
-
-### 😖 The Pain
-SMEs run **4–7 marketing channels simultaneously** with no reliable way to tell which ones drive revenue. Owners spend **12–20 hours per month** on manual reporting, and **$2,400–$19,200 annually** is wasted on underperforming channels. Traditional attribution tools are built for enterprises with **$500K+ budgets** — out of reach for businesses spending $2K–$8K/month on marketing.
-
-### 🏚️ Legacy Approach
-- **Manual spreadsheets & gut feel** — error-prone, unscalable, no real-time insight
-- **Enterprise SaaS** (HubSpot, Northbeam, Triple Whale) — $500–$5,000+/month, locked-in, no data ownership
-- **Siloed analytics** — Google Analytics, Meta Ads, LinkedIn Ads, email platforms each report in isolation
-- **No agentic orchestration** — data pipelines require dedicated engineers to build and maintain
-
-### 🚀 redevops.io
-An **open-source, self-hostable agentic platform** using **PostHog**, **Matomo**, and **LangGraph** multi-agent orchestration. Owners get **business-outcome insights** without hiring analytics specialists or paying enterprise prices. Deploy on your own infrastructure — your data stays yours.
-
----
-
-## Value Propositions
-
-1. **Agentic Attribution Engine** — LangGraph-powered multi-agent system automatically correlates marketing spend across channels to revenue outcomes. No manual tagging, no complex setup.
-
-2. **Open-Source & Self-Hostable** — Full AGPL license. Deploy on your own VPS, Kubernetes cluster, or Raspberry Pi. No per-seat fees, no data lock-in, no surprise price hikes.
-
-3. **Enterprise-Grade Analytics Stack** — Built on battle-tested open-source components: **PostHog** for product analytics, **Matomo** for web analytics, **Grafana** for dashboards, and **ClickHouse** for high-performance querying.
-
-4. **Privacy-First by Default** — Self-hosted means customer data never leaves your infrastructure. Compliant with GDPR, CCPA, and other privacy regulations out of the box.
-
-5. **Affordable at SME Scale** — Free open-core for self-hosters. Managed cloud from **$500–$2,000/month**. Setup services from **$5K–$15K**. Compare to HubSpot at $5,000/month or Northbeam's private enterprise pricing.
-
----
-
-## Architecture Overview
+for the demo tenant **Summit Roofing Co.** (a roofing contractor).
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    Agent Layer (LangGraph)               │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌─────────┐ │
-│  │ Channel  │  │Attribution│  │  Budget  │  │Insights │ │
-│  │  Agent   │  │   Agent   │  │  Agent   │  │  Agent  │ │
-│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬────┘ │
-│       └──────────────┴─────────────┴──────────────┘      │
-│                        │                                  │
-│              ┌─────────▼──────────┐                      │
-│              │  Orchestrator      │                      │
-│              │  (LangGraph)       │                      │
-│              └─────────┬──────────┘                      │
-└────────────────────────┼─────────────────────────────────┘
-                         │
-┌────────────────────────▼─────────────────────────────────┐
-│                   Open-Source Core                        │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐ │
-│  │ PostHog  │  │  Matomo  │  │ClickHouse│  │  Grafana │ │
-│  │(Product  │  │  (Web    │  │ (Columnar│  │(Dashboard│ │
-│  │Analytics)│  │Analytics)│  │  Store)  │  │   & Viz) │ │
-│  └──────────┘  └──────────┘  └──────────┘  └──────────┘ │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐               │
-│  │ Firewall │  │   IDS    │  │ Billing  │               │
-│  │(OPNsense)│  │(Suricata)│  │ (Lago)   │               │
-│  └──────────┘  └──────────┘  └──────────┘               │
-└──────────────────────────────────────────────────────────┘
+Umami (OSS core, :3002) ──REST──▶ app.py (FastAPI, :8205) ──▶ MD3 dashboard + /api/activity + /agent/run
+        ▲                                                       agentic actions (analyze, reallocate_budget)
+        └── seed.py bootstraps the website + inserts dated session/event rows (idempotent)
 ```
 
-### Open-Source Core Components
+## Files
 
-| Component | Role | Technology |
-|-----------|------|------------|
-| **Product Analytics** | Event tracking, funnel analysis, user journeys | [PostHog](https://posthog.com) |
-| **Web Analytics** | Privacy-compliant page views, referrers, campaigns | [Matomo](https://matomo.org) |
-| **Columnar Store** | High-performance analytical queries | [ClickHouse](https://clickhouse.com) |
-| **Dashboards & Viz** | Real-time marketing dashboards | [Grafana](https://grafana.com) |
-| **Firewall** | Network security & traffic filtering | [OPNsense](https://opnsense.org) |
-| **IDS/IPS** | Intrusion detection & prevention | [Suricata](https://suricata.io) |
-| **Billing** | Usage-based metering & invoicing | [Lago](https://getlago.com) |
-| **Orchestration** | Multi-agent workflow management | [LangGraph](https://langchain.com/langgraph) |
+| File | Purpose |
+|------|---------|
+| `seed.py` | Idempotent seeder: logs in, creates/reuses the **Summit Roofing** website, then inserts REAL `session` + `website_event` rows (dated across the last 8 days, with `utm_source`/`utm_medium`/`utm_campaign`/`referrer_domain`) directly into the Umami Postgres, and fires a couple of `/api/send` events. Writes `.env`. |
+| `app.py` | FastAPI service (port **8205**): `/health`, `/api/activity`, `/` dashboard, `/agent/run`. |
+| `requirements.txt` | fastapi, uvicorn, httpx. |
+| `Dockerfile` | slim-python image running `uvicorn app:app --port 8205`. |
+| `.env` | Written by `seed.py`: `UMAMI_URL`, `WEBSITE_ID`, `UMAMI_ADMIN_*`, `UMAMI_FRONT_URL`. |
 
-### Agent Layer
+## Umami bootstrap method (the one that worked)
 
-The **LangGraph-powered agent layer** orchestrates specialized agents:
+Umami v2's REST API is ready out of the box; you just need an auth token + a website id:
 
-- **Channel Agent** — Ingests data from Google Ads, Meta Ads, LinkedIn, email, organic search, and direct traffic
-- **Attribution Agent** — Applies multi-touch attribution models (linear, time-decay, U-shaped, data-driven)
-- **Budget Agent** — Recommends optimal budget allocation across channels based on ROI
-- **Insights Agent** — Generates natural-language summaries of what's working and what's not
+1. **Login** — `POST /api/auth/login {"username":"admin","password":"umami"}` → `{ "token": ... }`.
+   Use it as `Authorization: Bearer <token>`. (`app.py` re-logs in automatically and caches
+   the token for 10 minutes — no manual key handling.)
+2. **Create the website** — `POST /api/websites {"name":"Summit Roofing","domain":"summitroofing.test"}`
+   → a website object whose **`id`** (a UUID) is captured and written to `.env` as `WEBSITE_ID`.
+   `seed.py` looks the site up by name first, so re-runs reuse the same id (idempotent).
 
----
+### Seeding: REAL analytics rows over RECENT days
 
-## Quickstart
+Umami's public ingest, `POST /api/send`, stamps every event with `created_at = now()`, so it
+**cannot** place pageviews across the *past* week — which lead-source attribution needs. So
+`seed.py` inserts the rows directly into the Umami Postgres (container
+**`agentic-cores-umami-db-1`**, db/user/pass = `umami`), using the exact columns the Umami app
+itself writes:
 
-### Prerequisites
+- `session` rows (browser / os / device / screen / city, dated `created_at`), and
+- `website_event` rows with `url_path`, `page_title`, `referrer_domain`, and dedicated
+  **`utm_source` / `utm_medium` / `utm_campaign`** columns, dated across the last 8 days.
 
-- **Docker** & **Docker Compose** (v2.20+)
-- **Git**
-- **4 GB RAM** minimum (8 GB recommended)
-- Domain name (optional, for production)
+Because these are the same columns Umami writes, every Umami REST report reads them back as
+genuine traffic. A couple of `/api/send` calls are also fired so the public ingest path is
+exercised end-to-end. The seed is deterministic (fixed RNG) and clears prior rows for the site
+first, so it's safe to re-run.
 
-### 1. Clone & Deploy
+Seeded mix (~60 pageviews / 37 sessions across 4 roofing lead channels):
+
+| Channel | utm_source | utm_medium | referrer |
+|---------|-----------|-----------|----------|
+| Google Ads | `google` | `cpc` | google.com |
+| Facebook | `facebook` | `cpc` | facebook.com |
+| Yard sign QR | `yardsign-qr` | `referral` | yardsign-qr.test |
+| Organic / Direct | — | `organic` | (none) |
+
+### Reading attribution back (Umami metric types)
+
+The Umami v2 metric `type` keys are **camelCase**: `referrer`, `utmSource`, `utmMedium`,
+`utmCampaign` (plus `url`, `query`, etc.). `app.py` reads `utmSource`/`utmMedium`/`utmCampaign`
++ `referrer` and falls back to `referrer` if UTM is empty.
 
 ```bash
-git clone https://github.com/redevops-io/redevops.git
-cd redevops
-
-# Start the full stack
-docker compose up -d
-
-# Check status
-docker compose ps
+TOKEN=$(curl -s -X POST http://localhost:3002/api/auth/login \
+  -H 'Content-Type: application/json' -d '{"username":"admin","password":"umami"}' \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')
+WID=<website id from .env>
+RANGE="startAt=$(( ($(date +%s)-86400*30)*1000 ))&endAt=$(( ($(date +%s)+86400)*1000 ))"
+curl -s "http://localhost:3002/api/websites/$WID/stats?$RANGE" -H "Authorization: Bearer $TOKEN"
+curl -s "http://localhost:3002/api/websites/$WID/metrics?type=utmSource&$RANGE" -H "Authorization: Bearer $TOKEN"
+curl -s "http://localhost:3002/api/websites/$WID/metrics?type=referrer&$RANGE"  -H "Authorization: Bearer $TOKEN"
 ```
 
-### 2. Access Services
-
-| Service | URL | Default Credentials |
-|---------|-----|-------------------|
-| **PostHog** | `http://localhost:8000` | `admin@redevops.local` / `changeme` |
-| **Matomo** | `http://localhost:8080` | `admin` / `changeme` |
-| **Grafana** | `http://localhost:3000` | `admin` / `admin` |
-| **API** | `http://localhost:8081` | API key in `.env` |
-
-### 3. Configure Marketing Channels
+## Seed + run
 
 ```bash
-# Add your channel API keys
-cp .env.example .env
-# Edit .env with your:
-#   - GOOGLE_ADS_CLIENT_ID
-#   - META_ADS_ACCESS_TOKEN
-#   - LINKEDIN_ADS_CLIENT_ID
-#   - MAILCHIMP_API_KEY
+cd agents/growth-engine
 
-# Restart to apply
-docker compose restart agents
+# 1. Seed Umami (idempotent — safe to re-run; writes .env with the website id)
+python3 seed.py
+#   → SEED_OK website_id=<uuid> sessions=36 events=58 conversions=12
+#       channels[Facebook=4 Google Ads=11 Organic / Direct=14 Yard sign QR=7] public_ingest=ok
+
+# 2. Install deps + run the service
+pip install -r requirements.txt          # add --break-system-packages on PEP-668 hosts
+python3 -m uvicorn app:app --host 0.0.0.0 --port 8205
+#   app.py auto-loads .env (UMAMI_URL, WEBSITE_ID) — no manual config.
+
+# Or with Docker (point UMAMI_URL at the Umami service, not localhost):
+docker build -t agentic-growth-engine .
+docker run --rm -p 8205:8205 \
+  -e UMAMI_URL=http://host.docker.internal:3002 \
+  -e WEBSITE_ID=<id from .env> \
+  -e UMAMI_FRONT_URL=http://192.168.40.8:3002 \
+  agentic-growth-engine
 ```
 
-### 4. View Attribution Reports
+## Environment variables
 
-Open **Grafana** → **Marketing Attribution Dashboard** to see:
+| Var | Default | Meaning |
+|-----|---------|---------|
+| `UMAMI_URL` | `http://localhost:3002` | Umami REST base (`/api/...`). |
+| `WEBSITE_ID` | _(from .env)_ | The Summit Roofing website id captured by the seed. |
+| `UMAMI_ADMIN_USER` / `UMAMI_ADMIN_PASS` | `admin` / `umami` | Login used to mint a bearer token. |
+| `UMAMI_FRONT_URL` | `http://192.168.40.8:3002` | Umami UI link for the "Open in Umami ↗" button (the human-operable path). |
+| `PORT` | `8205` | uvicorn bind port. |
+| `ANTHROPIC_API_KEY` | _(optional)_ | If set, `/agent/run` `analyze` adds an LLM reasoning blurb (model `claude-opus-4-8`). The endpoint works fully without it — the analysis is deterministic over real Umami data. |
 
-- Revenue by channel (last 7/30/90 days)
-- Cost per acquisition (CPA) per channel
-- Return on ad spend (ROAS)
-- Multi-touch attribution breakdown
-- Budget optimization recommendations
+## Endpoints
 
-### 5. Production Deployment
+- `GET /health` → `{"status":"ok","core":"umami","connected": <bool from /api/heartbeat>}`
+- `GET /api/activity` → live growth KPIs (blended CPL, leads, ROAS, booked rate) + lead-source
+  attribution (real referrer / UTM), a conversion funnel, and a per-channel table with
+  spend / CPL / ROAS — all derived from Umami REST. Cached 15s.
+- `GET /` → the MD3 growth dashboard rendered from the live data: KPI tiles, a lead-source
+  attribution bar breakdown, a lead-to-job conversion funnel, and a channel table with
+  spend / CPL / ROAS columns. Header shows "Summit Roofing Co.", a green
+  "agent active · core: Umami connected" pill, a "data: live from Umami" badge, and an
+  **"Open in Umami ↗"** button (→ `http://192.168.40.8:3002`). An approval banner appears
+  recommending a budget shift between paid channels.
+- `POST /agent/run` with `{"action": ...}`:
+  - `"analyze"` → summarizes which channels perform from the real attribution data (top
+    channel, CPL, ROAS per channel) + a budget recommendation; adds an optional LLM blurb.
+  - `"reallocate_budget"` `{from,to,amount}` → **approval-gated** (the module declares
+    `approval_required:[budget_change]`). Returns `{"status":"pending_approval", ...}` and
+    does **not** execute — actual ad spend lives in the external Ads platform (Google/Meta).
+
+## Validation (actually run)
 
 ```bash
-# Set up with TLS and domain
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# Real Umami traffic via REST (after seed)
+curl -s "http://localhost:3002/api/websites/$WID/stats?$RANGE" -H "Authorization: Bearer $TOKEN"
+#   → {"pageviews":60,"visitors":37,"visits":37,"bounces":19,...}
+curl -s "http://localhost:3002/api/websites/$WID/metrics?type=utmSource&$RANGE" -H "Authorization: Bearer $TOKEN"
+#   → [{"x":"google","y":12},{"x":"yardsign-qr","y":7},{"x":"facebook","y":5}]
 
-# Configure OPNsense firewall rules
-# Configure Suricata IDS rules
-# Set up Lago billing with your Stripe key
+# Real channel attribution from the agent layer
+curl -s http://localhost:8205/api/activity
+#   → KPIs: CPL $33 · Leads 37 · ROAS 25.7x · Booked 30%; channel table Google/Facebook/Yard sign/Organic
+
+# Dashboard contains MD3 tokens + real channels + Open in Umami
+curl -s http://localhost:8205/ | grep -o 'Open in Umami\|core: Umami connected\|Google Ads\|Yard sign QR\|Lead-source attribution'
+
+# Agentic actions
+curl -s -X POST http://localhost:8205/agent/run -d '{"action":"analyze"}'
+#   → top channel + per-channel CPL/ROAS + recommendation (from real data)
+curl -s -X POST http://localhost:8205/agent/run \
+  -d '{"action":"reallocate_budget","from":"facebook","to":"google","amount":600}'
+#   → {"status":"pending_approval","approval_required":"budget_change", ...}
 ```
 
-See **[docs/production.md](docs/production.md)** for full production guide.
+## Notes on the economics
 
----
+CPL and ROAS are computed from **real Umami traffic + conversions**, but the per-click spend
+rates (`CHANNEL_CPC`) and the per-job lead value (`LEAD_VALUE`) are static planning assumptions
+— actual ad spend and bids live in Google / Meta Ads, not in an analytics tool. That's exactly
+why `reallocate_budget` is approval-gated rather than auto-executed: the agent reads what's
+working from Umami and *stages* a budget recommendation, but a human moves the money in the Ads
+platform.
 
-## License
+## Replicating for other cores
 
-**AGPL-3.0** — Free to use, modify, and self-host. Commercial use requires a commercial license for closed-source distribution.
-
-## Pricing
-
-| Tier | Price | Includes |
-|------|-------|----------|
-| **Open Core** | Free | Self-hosted, all core features, community support |
-| **Setup Services** | $5K–$15K | Deployment, configuration, custom integrations |
-| **Managed Cloud** | $500–$2K/mo | Hosted, managed, SLA-backed, priority support |
-
----
-
-## Community & Support
-
-- [GitHub Issues](https://github.com/redevops-io/redevops/issues) — Bug reports & feature requests
-- [Discord](https://discord.gg/redevops) — Community discussion
-- [Documentation](https://docs.redevops.io) — Full docs
-- Email: `hello@redevops.io`
-
----
-
-*Built with ❤️ for SMEs who deserve to know which half of their ad budget is working.*
+Same recipe as the billing reference: point `UMAMI_*` at the new core's API + token, replace the
+`fetch_activity()` Umami calls with the new core's endpoints and a `compute_kpis` for that domain,
+reuse `BASE_CSS` + the `_kpi_tiles` / `_barlist` / `_table_card` render helpers verbatim, and make
+`/agent/run` actions deterministic core calls with a human-approval gate on anything that moves
+money (the `reallocate_budget` pattern).
